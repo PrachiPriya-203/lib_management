@@ -46,7 +46,6 @@
         "name": "Priti",
         "roll": "1234",
         "dept": "CSE",
-        "password": "$2b$10$CvJpZdJIiE38ws7QM4xxZejhrOL6u6rYCE0CfUKqWOZfA3ni4hVLC",
         "role": "student",
         "issuedAt": 1777217662582
       }

@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Library Access</title>
     <link rel="stylesheet" href="style.css">
 
@@ -30,16 +32,22 @@
 
             <!-- INPUTS -->
             <div class="input-group">
-                <input id="name" placeholder="Full Name">
-                
+                <!-- Student fields -->
                 <div id="studentFields">
-                    <input id="roll" placeholder="ID Number">
+                    <input id="roll" placeholder="ID / Roll Number">
                     <input id="dept" placeholder="Department (CSE / IT)">
                     <input id="password" type="password" placeholder="Password">
                 </div>
 
-                <input id="adminPassword" type="password" placeholder="Admin Password" style="display: none;">
+                <!-- Admin fields -->
+                <div id="adminFields" style="display:none;">
+                    <input id="adminId" placeholder="Admin ID / Username">
+                    <input id="adminPassword" type="password" placeholder="Admin Password">
+                </div>
             </div>
+
+            <!-- Error message -->
+            <p id="loginError" style="color:#ef4444; font-size:13px; display:none; margin-top:8px;"></p>
 
             <!-- BUTTON -->
             <button class="login-btn" onclick="login()">Enter System →</button>
@@ -61,44 +69,63 @@
             const studentBtn = document.getElementById("studentBtn");
             const adminBtn = document.getElementById("adminBtn");
             const studentFields = document.getElementById("studentFields");
-            const adminPassField = document.getElementById("adminPassword");
+            const adminFields = document.getElementById("adminFields");
+            const errorEl = document.getElementById("loginError");
 
             studentBtn.classList.remove("active");
             adminBtn.classList.remove("active");
 
+            // Clear error
+            errorEl.style.display = "none";
+            errorEl.textContent = "";
+
             if (r === "student") {
                 studentBtn.classList.add("active");
-                studentFields.style.display = "block";   // Show ID and Dept
-                adminPassField.style.display = "none";    // Hide Password
+                studentFields.style.display = "block";
+                adminFields.style.display = "none";
             } else {
                 adminBtn.classList.add("active");
-                studentFields.style.display = "none";    // Hide ID and Dept
-                adminPassField.style.display = "block";   // Show Password
+                studentFields.style.display = "none";
+                adminFields.style.display = "block";
             }
         }
 
+        function showError(msg) {
+            const errorEl = document.getElementById("loginError");
+            errorEl.textContent = msg;
+            errorEl.style.display = "block";
+        }
+
         async function login() {
-            const nameValue = document.getElementById("name").value.trim();
+            const errorEl = document.getElementById("loginError");
+            errorEl.style.display = "none";
+
             let rollValue, passwordValue;
 
             if (role === "admin") {
-                // For Admin: use Name as the Roll identifier and the Password field
-                rollValue = nameValue; 
+                rollValue = document.getElementById("adminId").value.trim();
                 passwordValue = document.getElementById("adminPassword").value.trim();
             } else {
-                // For Student: use ID Number and Dept as password
                 rollValue = document.getElementById("roll").value.trim();
                 passwordValue = document.getElementById("password").value.trim();
             }
+
+            if (!rollValue || !passwordValue) {
+                return showError("Please fill in all fields.");
+            }
+
+            const btn = document.querySelector(".login-btn");
+            btn.disabled = true;
+            btn.textContent = "Logging in...";
 
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        roll: rollValue, 
+                    body: JSON.stringify({
+                        roll: rollValue,
                         password: passwordValue,
-                        role: role 
+                        role: role
                     })
                 });
 
@@ -108,12 +135,21 @@
                     window.location.href = (userData.role === "admin") ? "admin.html" : "student.html";
                 } else {
                     const errorText = await response.text();
-                    alert("Login Failed: " + errorText);
+                    showError("Login Failed: " + errorText);
                 }
             } catch (err) {
-                alert("Server Error");
+                console.error("Login error:", err);
+                showError("Cannot connect to server. Please ensure the server is running.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Enter System →";
             }
         }
+
+        // Allow Enter key to submit
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") login();
+        });
 
         // 🔥 PARTICLES GENERATOR
         const particles = document.querySelector(".particles");

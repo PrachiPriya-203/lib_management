@@ -70,5 +70,14 @@
     "phone": "123456789",
     "password": "$2b$10$z./7yN1nCKl/xUGG8tymOeO3r6qXmwtlC4h7R8WY62oSAUZHhYw6i",
     "role": "student"
+  },
+  {
+    "id": "1795139099325",
+    "name": "Rahul Sharma",
+    "roll": "CSE/2024/101",
+    "dept": "CSE",
+    "phone": "9334359608",
+    "password": "$2b$10$7KvYluDSRNZ2VlhvBg8BzOcCnlQ4neLhEyoDYaenDZuaWYNhO0yfS",
+    "role": "student"
   }
 ]

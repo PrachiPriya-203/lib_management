@@ -1,15 +1,26 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library - Admin</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         (function() {
             const userData = sessionStorage.getItem("user");
             if (!userData) {
-                // No user data found? Kick them back to login
-                alert("Please login to access this page.");
+                window.location.href = "login.html";
+                return;
+            }
+            try {
+                const user = JSON.parse(userData);
+                if (!user || user.role !== "admin") {
+                    window.location.href = "login.html";
+                }
+            } catch (e) {
                 window.location.href = "login.html";
             }
         })();
@@ -26,10 +37,10 @@
         <div class="sidebar glass">
             <h2>👨‍💼 Admin</h2>
 
-            <button onclick="showSection('add')" class="nav-btn active"> Dahboard</button>
-            <button onclick="showSection('requests')" class="nav-btn">📩 Requests</button>
-            <button onclick="showSection('issued')" class="nav-btn">📊 Issued</button>
-            <button onclick="showSection('students')" class="nav-btn">👥 Students</button>
+            <button onclick="showSection('add', this)" class="nav-btn active"> 🏠 Dashboard</button>
+            <button onclick="showSection('requests', this)" class="nav-btn">📩 Requests</button>
+            <button onclick="showSection('issued', this)" class="nav-btn">📊 Issued</button>
+            <button onclick="showSection('students', this)" class="nav-btn">👥 Students</button>
 
             <div class="bottom">
                 <button onclick="toggleDark()">🌙</button>
@@ -45,8 +56,8 @@
                 <h2>📊 Library Stats</h2>
                 <canvas id="chart"></canvas>
             </div>
-            <input id="searchAdmin" placeholder="Search books...">
-            <input id="filterDept" placeholder="Filter by dept">
+            <input id="searchAdmin" placeholder="Search books..." oninput="loadBooks()">
+            <input id="filterDept" placeholder="Filter by dept" oninput="loadBooks()">
 
             <!-- ADD -->
             <div id="add" class="section">
@@ -95,8 +106,7 @@
                             <th>Name</th>
                             <th>Roll</th>
                             <th>Dept</th>
-                            <th>Books Taken</th>
-                            <th>Returned</th>
+                            <th>Books Issued</th>
                         </tr>
                     </thead>
                     <tbody id="studentTable"></tbody>

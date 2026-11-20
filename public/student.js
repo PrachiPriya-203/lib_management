@@ -1,4 +1,4 @@
-const API = "http://localhost:5000";
+const API = "";
 
 // Apply saved theme
 if (localStorage.getItem("theme") === "light") {
@@ -11,8 +11,7 @@ try {
     user = JSON.parse(sessionStorage.getItem("user"));
 } catch (e) {}
 
-if (!user) window.location = "login.html";
-if (!user.role) user.role = "student";
+if (!user) window.location.href = "login.html";
 
 // 🔔 TOAST
 function toast(msg) {
@@ -26,15 +25,21 @@ function toast(msg) {
 // 🚪 LOGOUT
 function logout() {
     sessionStorage.removeItem("user");
-    window.location = "login.html";
+    window.location.href = "login.html";
 }
 
-// 🌙 DARK MODE
+// 🌙 DARK / LIGHT TOGGLE
 function toggleDark() {
-    document.body.classList.toggle("dark");
+    document.body.classList.toggle("light");
+
+    if (document.body.classList.contains("light")) {
+        localStorage.setItem("theme", "light");
+    } else {
+        localStorage.setItem("theme", "dark");
+    }
 }
 
-// 🔁 SECTION SWITCH (needed for your HTML)
+// 🔁 SECTION SWITCH
 function showSection(id, el) {
     document.querySelectorAll(".section").forEach(sec => {
         sec.style.display = "none";
@@ -60,7 +65,7 @@ window.addEventListener("load", () => {
 async function loadBooks() {
     try {
         const books = await (await fetch(`${API}/books`)).json();
-        const requests = await (await fetch(`${API}/requests`)).json();
+        const requests = await (await fetch(`${API}/myRequests?roll=${encodeURIComponent(user.roll)}`)).json();
 
         const searchEl = document.getElementById("search");
         const search = searchEl ? searchEl.value.toLowerCase() : "";
@@ -85,29 +90,36 @@ async function loadBooks() {
         }
 
         filtered.forEach(b => {
+            // Check if user has a pending request for this book
             const alreadyRequested = requests.some(r =>
                 r.bookId === b.id &&
-                r.student.roll === user.roll &&
                 r.status === "pending"
             );
+
+            // Check if user already has this book issued
+            const alreadyIssued = (b.issuedTo || []).some(s => s.roll === user.roll);
+
+            const available = b.qty - b.issued;
 
             div.innerHTML += `
             <div class="card">
                 <h3>${b.title}</h3>
                 <p>by ${b.author}</p>
                 <p>Dept: ${b.dept}</p>
-                <p>Available: ${b.qty - b.issued}</p>
+                <p>Available: ${available}</p>
 
-                <button 
+                <button
                     onclick="requestBook('${b.id}')"
-                    ${alreadyRequested ? "disabled" : ""}>
-                    ${alreadyRequested ? "⏳ Requested" : "📩 Request"}
+                    ${(alreadyRequested || alreadyIssued || available <= 0) ? "disabled" : ""}>
+                    ${alreadyRequested ? "⏳ Requested" : alreadyIssued ? "✅ Issued" : available <= 0 ? "📵 Unavailable" : "📩 Request"}
                 </button>
             </div>`;
         });
 
     } catch (err) {
         console.error("loadBooks error:", err);
+        const div = document.getElementById("books");
+        if (div) div.innerHTML = `<p>Failed to load books ⚠️</p>`;
         toast("Failed to load books ⚠️");
     }
 }
@@ -118,8 +130,15 @@ async function requestBook(id) {
         const res = await fetch(`${API}/request/${id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(user)
+            body: JSON.stringify({
+                name: user.name,
+                roll: user.roll,
+                dept: user.dept,
+                role: user.role
+            })
         });
+
+        if (!res.ok) throw new Error("Request failed");
 
         const msg = await res.text();
 
@@ -170,6 +189,8 @@ async function loadMyBooks() {
 
     } catch (err) {
         console.error("loadMyBooks error:", err);
+        const div = document.getElementById("myBooks");
+        if (div) div.innerHTML = `<p>Failed to load your books ⚠️</p>`;
     }
 }
 
@@ -179,8 +200,15 @@ async function returnBook(id) {
         const res = await fetch(`${API}/returnRequest/${id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(user)
+            body: JSON.stringify({
+                name: user.name,
+                roll: user.roll,
+                dept: user.dept,
+                role: user.role
+            })
         });
+
+        if (!res.ok) throw new Error("Return failed");
 
         const msg = await res.text();
 
@@ -200,12 +228,12 @@ async function returnBook(id) {
 // ================= REQUEST STATUS =================
 async function loadRequests() {
     try {
-        const res = await fetch(`${API}/requests`);
-        const data = await res.json();
+        // Use the student-specific endpoint to get all statuses (pending, approved, rejected)
+        const res = await fetch(`${API}/myRequests?roll=${encodeURIComponent(user.roll)}`);
+        if (!res.ok) throw new Error("Failed to fetch requests");
+        const my = await res.json();
 
         const books = await (await fetch(`${API}/books`)).json();
-
-        const my = data.filter(r => r.student.roll === user.roll);
 
         const div = document.getElementById("requests");
         if (!div) return;
@@ -239,16 +267,8 @@ async function loadRequests() {
 
     } catch (err) {
         console.error("loadRequests error:", err);
-    }
-}
-
-function toggleDark() {
-    document.body.classList.toggle("light");
-
-    if (document.body.classList.contains("light")) {
-        localStorage.setItem("theme", "light");
-    } else {
-        localStorage.setItem("theme", "dark");
+        const div = document.getElementById("requests");
+        if (div) div.innerHTML = `<p>Failed to load requests ⚠️</p>`;
     }
 }
 

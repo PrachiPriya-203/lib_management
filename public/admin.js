@@ -1,4 +1,4 @@
-const API = "http://localhost:5000";
+const API = "";
 
 // Apply saved theme
 if (localStorage.getItem("theme") === "light") {
@@ -7,9 +7,8 @@ if (localStorage.getItem("theme") === "light") {
 
 const user = JSON.parse(sessionStorage.getItem("user"));
 
-if (!user) window.location = "login.html";
-if (!user.role) user.role = "admin";
-if (user.role !== "admin") window.location = "student.html";
+if (!user) window.location.href = "login.html";
+if (user && user.role !== "admin") window.location.href = "student.html";
 
 // 🔔 TOAST
 function toast(msg) {
@@ -23,12 +22,18 @@ function toast(msg) {
 // 🚪 LOGOUT
 function logout() {
     sessionStorage.removeItem("user");
-    window.location = "login.html";
+    window.location.href = "login.html";
 }
 
-// 🌙 DARK MODE
+// 🌙 DARK / LIGHT TOGGLE
 function toggleDark() {
-    document.body.classList.toggle("dark");
+    document.body.classList.toggle("light");
+
+    if (document.body.classList.contains("light")) {
+        localStorage.setItem("theme", "light");
+    } else {
+        localStorage.setItem("theme", "dark");
+    }
 }
 
 // 🔁 SECTION SWITCH
@@ -37,13 +42,19 @@ function showSection(id, el) {
         sec.style.display = "none";
     });
 
-    document.getElementById(id).style.display = "block";
+    const target = document.getElementById(id);
+    if (target) target.style.display = "block";
 
     document.querySelectorAll(".nav-btn").forEach(btn => {
         btn.classList.remove("active");
     });
 
     if (el) el.classList.add("active");
+
+    // Load relevant data when section is shown
+    if (id === "students") loadStudents();
+    if (id === "issued") loadIssued();
+    if (id === "requests") loadRequests();
 }
 
 // INPUT CACHE
@@ -80,16 +91,22 @@ async function updateBook() {
         return toast("Fill all fields ⚠️");
     }
 
-    await fetch(`${API}/edit/${currentEditId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, author, dept, qty })
-    });
+    try {
+        const res = await fetch(`${API}/edit/${currentEditId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, author, dept, qty })
+        });
 
-    toast("Book Updated ✏️");
+        if (!res.ok) throw new Error("Update failed");
 
-    closeModal();
-    loadBooks();
+        toast("Book Updated ✏️");
+        closeModal();
+        loadBooks();
+    } catch (err) {
+        console.error("updateBook error:", err);
+        toast("Failed to update book ⚠️");
+    }
 }
 
 // ================= ADD BOOK =================
@@ -103,155 +120,235 @@ async function addBook() {
         return toast("Fill all fields ⚠️");
     }
 
-    await fetch(`${API}/addBook`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, author, dept, qty })
-    });
+    try {
+        const res = await fetch(`${API}/addBook`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, author, dept, qty })
+        });
 
-    toast("Book Added 📚");
+        if (!res.ok) throw new Error("Add failed");
 
-    titleEl.value = authorEl.value = deptEl.value = qtyEl.value = "";
-
-    refreshAll();
+        toast("Book Added 📚");
+        titleEl.value = authorEl.value = deptEl.value = qtyEl.value = "";
+        refreshAll();
+    } catch (err) {
+        console.error("addBook error:", err);
+        toast("Failed to add book ⚠️");
+    }
 }
 
-// ================= LOAD BOOKS (FIXED) =================
+// ================= LOAD BOOKS =================
 async function loadBooks() {
-    let books = await (await fetch(`${API}/books`)).json();
+    try {
+        let books = await (await fetch(`${API}/books`)).json();
 
-    const search =
-        document.getElementById("searchAdmin").value.toLowerCase() || "";
-    const deptFilter =
-        document.getElementById("filterDept").value.toLowerCase() || "";
+        const search =
+            document.getElementById("searchAdmin").value.toLowerCase() || "";
+        const deptFilter =
+            document.getElementById("filterDept").value.toLowerCase() || "";
 
-    books = books.filter(b =>
-        b.title.toLowerCase().includes(search) &&
-        b.dept.toLowerCase().includes(deptFilter)
-    );
+        books = books.filter(b =>
+            b.title.toLowerCase().includes(search) &&
+            b.dept.toLowerCase().includes(deptFilter)
+        );
 
-    const div = document.getElementById("books");
-    div.innerHTML = "";
+        const div = document.getElementById("books");
+        div.innerHTML = "";
 
-    if (books.length === 0) {
-        div.innerHTML = `<p>No books found 😕</p>`;
-        return;
+        if (books.length === 0) {
+            div.innerHTML = `<p>No books found 😕</p>`;
+            return;
+        }
+
+        books.forEach(b => {
+            // Escape single quotes in fields to prevent broken onclick attributes
+            const safeTitle = (b.title || "").replace(/'/g, "&#39;");
+            const safeAuthor = (b.author || "").replace(/'/g, "&#39;");
+            const safeDept = (b.dept || "").replace(/'/g, "&#39;");
+
+            div.innerHTML += `
+            <div class="card">
+                <h3>${b.title}</h3>
+                <p>by ${b.author}</p>
+                <p>Dept: ${b.dept}</p>
+                <p>Available: ${b.qty - b.issued}</p>
+
+                <button onclick="editBook('${b.id}', '${safeTitle}', '${safeAuthor}', '${safeDept}', '${b.qty}')">
+                    ✏️ Edit
+                </button>
+            </div>`;
+        });
+    } catch (err) {
+        console.error("loadBooks error:", err);
+        const div = document.getElementById("books");
+        if (div) div.innerHTML = `<p>Failed to load books ⚠️</p>`;
+        toast("Failed to load books ⚠️");
     }
-
-    books.forEach(b => {
-        div.innerHTML += `
-        <div class="card">
-            <h3>${b.title}</h3>
-            <p>by ${b.author}</p>
-            <p>Dept: ${b.dept}</p>
-            <p>Available: ${b.qty - b.issued}</p>
-
-            <button onclick="editBook('${b.id}', '${b.title}', '${b.author}', '${b.dept}', '${b.qty}')">
-                ✏️ Edit
-            </button>
-        </div>`;
-    });
 }
 
 // ================= REQUESTS =================
 async function loadRequests() {
-    const data = await (await fetch(`${API}/requests`)).json();
+    try {
+        const data = await (await fetch(`${API}/requests`)).json();
 
-    const div = document.getElementById("requestList");
-    div.innerHTML = "";
+        const div = document.getElementById("requestList");
+        div.innerHTML = "";
 
-    const btn = document.querySelector(".nav-btn:nth-child(2)");
+        // Find the Requests nav button by text content (more reliable than nth-child)
+        const reqBtn = Array.from(document.querySelectorAll(".nav-btn"))
+            .find(btn => btn.textContent.includes("Requests"));
 
-    if (data.length === 0) {
-        div.innerHTML = `<p>No pending requests 📭</p>`;
-        btn.innerHTML = "📩 Requests";
-        return;
+        if (data.length === 0) {
+            div.innerHTML = `<p>No pending requests 📭</p>`;
+            if (reqBtn) reqBtn.innerHTML = "📩 Requests";
+            return;
+        }
+
+        if (reqBtn) reqBtn.innerHTML = `📩 Requests <span class="badge">${data.length}</span>`;
+
+        data.forEach(r => {
+            div.innerHTML += `
+            <div class="card">
+                <h3>${r.student.name || "Unknown"}</h3>
+                <p>Roll: ${r.student.roll || r.student.Id || "N/A"}</p>
+                <p>Dept: ${r.student.dept || "N/A"}</p>
+
+                <p style="color:${r.type === "return" ? "#f59e0b" : "#22c55e"}">
+                    ${r.type === "return" ? "🔁 Return Request" : "📚 Issue Request"}
+                </p>
+
+                <button onclick="approve('${r.id}', '${r.type}')">✅ Approve</button>
+                <button onclick="cancelRequest('${r.id}')">❌ Reject</button>
+            </div>`;
+        });
+    } catch (err) {
+        console.error("loadRequests error:", err);
+        const div = document.getElementById("requestList");
+        if (div) div.innerHTML = `<p>Failed to load requests ⚠️</p>`;
     }
-
-    btn.innerHTML = `📩 Requests <span class="badge">${data.length}</span>`;
-
-    data.forEach(r => {
-        div.innerHTML += `
-        <div class="card">
-            <h3>${r.student.name}</h3>
-            <p>Roll: ${r.student.roll}</p>
-            <p>Dept: ${r.student.dept}</p>
-
-            <p style="color:${r.type === "return" ? "#f59e0b" : "#22c55e"}">
-                ${r.type === "return" ? "🔁 Return Request" : "📚 Issue Request"}
-            </p>
-
-            <button onclick="approve('${r.id}', '${r.type}')">✅ Approve</button>
-            <button onclick="cancelRequest('${r.id}')">❌ Reject</button>
-        </div>`;
-    });
 }
 
 // ================= APPROVE =================
 async function approve(id, type) {
-    await fetch(`${API}/approve/${id}`, { method: "POST" });
+    try {
+        const res = await fetch(`${API}/approve/${id}`, { method: "POST" });
+        if (!res.ok) throw new Error("Approve failed");
 
-    toast(type === "return" ? "Book Returned 🔁" : "Book Issued 📚");
-
-    refreshAll();
+        toast(type === "return" ? "Book Returned 🔁" : "Book Issued 📚");
+        refreshAll();
+    } catch (err) {
+        console.error("approve error:", err);
+        toast("Failed to approve request ⚠️");
+    }
 }
 
 // ================= CANCEL =================
 async function cancelRequest(id) {
-    await fetch(`${API}/cancel/${id}`, { method: "POST" });
+    try {
+        const res = await fetch(`${API}/cancel/${id}`, { method: "POST" });
+        if (!res.ok) throw new Error("Cancel failed");
 
-    toast("Request Rejected ❌");
-
-    loadRequests();
+        toast("Request Rejected ❌");
+        loadRequests();
+    } catch (err) {
+        console.error("cancelRequest error:", err);
+        toast("Failed to reject request ⚠️");
+    }
 }
 
 // ================= ISSUED =================
 async function loadIssued() {
-    const books = await (await fetch(`${API}/books`)).json();
+    try {
+        const books = await (await fetch(`${API}/books`)).json();
 
-    const table = document.getElementById("issuedTable");
-    table.innerHTML = "";
+        const table = document.getElementById("issuedTable");
+        table.innerHTML = "";
 
-    books.forEach(b => {
-        (b.issuedTo || []).forEach(s => {
+        let hasRows = false;
+
+        books.forEach(b => {
+            (b.issuedTo || []).forEach(s => {
+                hasRows = true;
+                table.innerHTML += `
+                <tr>
+                    <td>${b.title}</td>
+                    <td>${s.name || "N/A"}</td>
+                    <td>${s.roll || "N/A"}</td>
+                    <td>${s.dept || "N/A"}</td>
+                </tr>`;
+            });
+        });
+
+        if (!hasRows) {
+            table.innerHTML = `<tr><td colspan="4" style="text-align:center">No books currently issued 📭</td></tr>`;
+        }
+    } catch (err) {
+        console.error("loadIssued error:", err);
+        const table = document.getElementById("issuedTable");
+        if (table) table.innerHTML = `<tr><td colspan="4" style="text-align:center">Failed to load issued books ⚠️</td></tr>`;
+    }
+}
+
+// ================= STUDENTS =================
+async function loadStudents() {
+    try {
+        const data = await (await fetch(`${API}/analytics`)).json();
+        const table = document.getElementById("studentTable");
+        if (!table) return;
+
+        table.innerHTML = "";
+
+        const students = data.topStudents || [];
+
+        if (students.length === 0) {
+            table.innerHTML = `<tr><td colspan="4" style="text-align:center">No student data yet 📭</td></tr>`;
+            return;
+        }
+
+        students.forEach(s => {
             table.innerHTML += `
             <tr>
-                <td>${b.title}</td>
-                <td>${s.name}</td>
-                <td>${s.roll}</td>
-                <td>${s.dept}</td>
+                <td>${s.name || "N/A"}</td>
+                <td>${s.roll || "N/A"}</td>
+                <td>${s.dept || "N/A"}</td>
+                <td>${s.count || 0}</td>
             </tr>`;
         });
-    });
+    } catch (err) {
+        console.error("loadStudents error:", err);
+        const table = document.getElementById("studentTable");
+        if (table) table.innerHTML = `<tr><td colspan="4" style="text-align:center">Failed to load students ⚠️</td></tr>`;
+    }
 }
 
 // ================= CHART =================
 async function loadChart() {
-    const books = await (await fetch(`${API}/books`)).json();
+    try {
+        const books = await (await fetch(`${API}/books`)).json();
 
-    let total = books.reduce((a, b) => a + b.qty, 0);
-    let issued = books.reduce((a, b) => a + b.issued, 0);
+        let total = books.reduce((a, b) => a + b.qty, 0);
+        let issued = books.reduce((a, b) => a + b.issued, 0);
 
-    if (window.myChart) window.myChart.destroy();
+        if (window.myChart) window.myChart.destroy();
 
-    window.myChart = new Chart(document.getElementById("chart"), {
-        type: "doughnut",
-        data: {
-            labels: ["Available", "Issued"],
-            datasets: [{
-                data: [total - issued, issued]
-            }]
-        }
-    });
-}
-
-function toggleDark() {
-    document.body.classList.toggle("light");
-
-    if (document.body.classList.contains("light")) {
-        localStorage.setItem("theme", "light");
-    } else {
-        localStorage.setItem("theme", "dark");
+        window.myChart = new Chart(document.getElementById("chart"), {
+            type: "doughnut",
+            data: {
+                labels: ["Available", "Issued"],
+                datasets: [{
+                    data: [total - issued, issued],
+                    backgroundColor: ["#3b82f6", "#9333ea"]
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { labels: { color: "white" } }
+                }
+            }
+        });
+    } catch (err) {
+        console.error("loadChart error:", err);
     }
 }
 
@@ -263,11 +360,12 @@ function refreshAll() {
     loadChart();
 }
 
-// 🔄 LIVE
+// 🔄 LIVE REFRESH
 setInterval(loadRequests, 5000);
 
 // INIT
 window.onload = () => {
-    document.getElementById("loader").style.display = "none";
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "none";
     refreshAll();
 };
